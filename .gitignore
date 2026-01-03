@@ -16,6 +16,3 @@ config.json
 # IDE
 .idea/
 .vscode/
-
-# Skills index is a separate repo, not part of this skill
-skills-index/
