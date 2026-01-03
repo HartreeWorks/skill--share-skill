@@ -12,11 +12,12 @@ This skill converts a private skill folder into a public GitHub repository, maki
 1. Validates the skill folder exists and has a SKILL.md file
 2. **CRITICAL: Security & privacy review** - checks for credentials and private information
 3. Creates a README.md with a link to SKILL.md
-4. Initializes git in the skill folder
-5. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
-6. Pushes the skill to the public repo
-7. Converts the local folder to a Git submodule
-8. Updates the public skills index at https://github.com/HartreeWorks/skills
+4. Adds update reminder section to SKILL.md (for auto-update system)
+5. Initialises git in the skill folder
+6. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
+7. Pushes the skill to the public repo
+8. Converts the local folder to a Git submodule
+9. Updates the public skills index at https://github.com/HartreeWorks/skills
 
 ## Prerequisites
 
@@ -192,7 +193,28 @@ Find more skills at [HartreeWorks/skills](https://github.com/HartreeWorks/skills
 
 **Extract the brief description** from the `description` field in the SKILL.md frontmatter.
 
-### Step 6: Initialize Git in Skill Folder
+### Step 5b: Add Update Reminder Section
+
+Append the update reminder section to the end of SKILL.md (if not already present):
+
+```bash
+# Check if update section already exists
+if ! grep -q "## Update check" "$SKILL_PATH/SKILL.md"; then
+  cat >> "$SKILL_PATH/SKILL.md" << 'EOF'
+
+## Update check
+
+This is a shared skill. Before executing, check `~/.claude/skills/.update-config.json`.
+If `auto_check_enabled` is true and `last_checked_timestamp` is older than `check_frequency_days`,
+mention: "It's been a while since skill updates were checked. Run `/check-skill-updates` to see available updates."
+Do NOT perform network operations - just check the local timestamp.
+EOF
+fi
+```
+
+This enables the auto-update reminder system for the newly shared skill.
+
+### Step 6: Initialise git in skill folder
 
 ```bash
 cd "$SKILL_PATH"
