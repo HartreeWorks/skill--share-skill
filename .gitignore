@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+
+# Config files that might contain secrets
+config.json
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+
+# Skills index is a separate repo, not part of this skill
+skills-index/
