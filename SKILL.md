@@ -194,13 +194,17 @@ See [SKILL.md](./SKILL.md) for complete documentation and usage instructions.
 
 ## Installation
 
-Paste this repository URL into Claude Code and ask Claude to install it.
+```bash
+npx skills add HartreeWorks/skill--{skill-name}
+```
+
+Or install all HartreeWorks skills: `npx skills add HartreeWorks/skills`
 
 ## About
 
 Created by [Peter Hartree](https://x.com/peterhartree). For updates, follow [AI Wow](https://wow.pjh.is), my AI uplift newsletter.
 
-Find more skills at [HartreeWorks/skills](https://github.com/HartreeWorks/skills).
+Find more skills at [skills.sh](https://skills.sh) and [HartreeWorks/skills](https://github.com/HartreeWorks/skills).
 ```
 
 **Extract the brief description** from the `description` field in the SKILL.md frontmatter.
@@ -216,10 +220,7 @@ if ! grep -q "## Update check" "$SKILL_PATH/SKILL.md"; then
 
 ## Update check
 
-This is a shared skill. Before executing, check `~/.claude/skills/.update-config.json`.
-If `auto_check_enabled` is true and `last_checked_timestamp` is older than `check_frequency_days`,
-mention: "It's been a while since skill updates were checked. Run `/update-skills` to see available updates."
-Do NOT perform network operations - just check the local timestamp.
+This skill is managed by [skills.sh](https://skills.sh). To check for updates, run `npx skills update`.
 EOF
 fi
 ```
