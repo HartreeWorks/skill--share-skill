@@ -10,14 +10,15 @@ This skill converts a private skill folder into a public GitHub repository, maki
 ## What It Does
 
 1. Validates the skill folder exists and has a SKILL.md file
-2. **CRITICAL: Security & privacy review** - checks for credentials and private information
-3. Creates a README.md with a link to SKILL.md
-4. Adds update reminder section to SKILL.md (for auto-update system)
-5. Initialises git in the skill folder
-6. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
-7. Pushes the skill to the public repo
-8. Converts the local folder to a Git submodule
-9. Updates the public skills index at https://github.com/HartreeWorks/skills
+2. **CRITICAL: Security & privacy review** — checks for credentials and private information
+3. **Skill quality review** — runs the `plugin-dev:skill-reviewer` agent to check best practices
+4. Creates a README.md with a link to SKILL.md
+5. Adds update reminder section to SKILL.md (for auto-update system)
+6. Initialises git in the skill folder
+7. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
+8. Pushes the skill to the public repo
+9. Converts the local folder to a Git submodule
+10. Updates the public skills index at https://github.com/HartreeWorks/skills
 
 ## Prerequisites
 
@@ -167,6 +168,17 @@ If the user chooses "Apply changes & proceed":
 3. Show a summary of changes made
 4. Continue to Step 5
 
+### Step 4: Skill Quality Review
+
+After the security review passes, run the `plugin-dev:skill-reviewer` agent to check the skill against best practices before publishing. Use the Task tool:
+
+```
+Task tool with subagent_type: "plugin-dev:skill-reviewer"
+prompt: "Review the skill at ~/.claude/skills/{SKILL_NAME}/SKILL.md for adherence to skill development best practices. Check: description quality (third-person, specific trigger phrases), writing style (imperative form), progressive disclosure (SKILL.md lean, details in references/), and that all referenced files exist."
+```
+
+Present the reviewer's findings to the user. If there are issues rated as high-priority, fix them before proceeding. Minor suggestions can be noted but don't need to block publishing.
+
 ### Step 5: Create README.md
 
 Create a README.md in the skill folder that links to SKILL.md:
@@ -214,7 +226,7 @@ fi
 
 This enables the auto-update reminder system for the newly shared skill.
 
-### Step 6: Initialise git in skill folder
+### Step 7: Initialise git in skill folder
 
 ```bash
 cd "$SKILL_PATH"
@@ -231,7 +243,7 @@ git commit -m "Initial commit
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
 
-### Step 7: Create Public GitHub Repository
+### Step 8: Create Public GitHub Repository
 
 ```bash
 REPO_NAME="skill--$SKILL_NAME"
@@ -240,7 +252,7 @@ REPO_NAME="skill--$SKILL_NAME"
 gh repo create "HartreeWorks/$REPO_NAME" --public --source="$SKILL_PATH" --remote=origin --push
 ```
 
-### Step 8: Convert to Submodule in Parent Repo
+### Step 9: Convert to Submodule in Parent Repo
 
 ```bash
 cd "$SKILLS_DIR"
@@ -260,7 +272,7 @@ Public repo: https://github.com/HartreeWorks/$REPO_NAME
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
 
-### Step 9: Update Public Skills Index
+### Step 10: Update Public Skills Index
 
 Add the new skill to the public skills index at `HartreeWorks/skills`.
 
@@ -292,7 +304,7 @@ git commit -m "Add {skill-name} skill
 git push origin main
 ```
 
-### Step 10: Confirm Success
+### Step 11: Confirm Success
 
 Output the public repository URL to the user:
 
@@ -329,11 +341,12 @@ User: "Share the mochi-srs skill"
    - Report findings and suggest: "80,000 Hours" → "HartreeWorks LTD"
    - Ask user to approve changes
 4. User approves → apply text replacements
-5. Create README.md linking to SKILL.md
-6. Init git and commit
-7. Create `HartreeWorks/skill--mochi-srs` public repo
-8. Convert to submodule
-9. Report success with the public URL
+5. **Skill Quality Review:** run `plugin-dev:skill-reviewer` agent → checks description, writing style, progressive disclosure
+6. Create README.md linking to SKILL.md
+7. Init git and commit
+8. Create `HartreeWorks/skill--mochi-srs` public repo
+9. Convert to submodule
+10. Report success with the public URL
 
 ## Notes
 
