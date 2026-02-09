@@ -13,12 +13,11 @@ This skill converts a private skill folder into a public GitHub repository, maki
 2. **CRITICAL: Security & privacy review** — checks for credentials and private information
 3. **Skill quality review** — runs the `plugin-dev:skill-reviewer` agent to check best practices
 4. Creates a README.md with a link to SKILL.md
-5. Adds update reminder section to SKILL.md (for auto-update system)
-6. Initialises git in the skill folder
-7. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
-8. Pushes the skill to the public repo
-9. Converts the local folder to a Git submodule
-10. Updates the public skills index at https://github.com/HartreeWorks/skills
+5. Initialises git in the skill folder
+6. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
+7. Pushes the skill to the public repo
+8. Converts the local folder to a Git submodule
+9. Updates the public skills index at https://github.com/HartreeWorks/skills
 
 ## Prerequisites
 
@@ -213,25 +212,7 @@ Find more skills at [skills.sh](https://skills.sh) and [HartreeWorks/skills](htt
 
 **Extract the brief description** from the `description` field in the SKILL.md frontmatter.
 
-### Step 5b: Add Update Reminder Section
-
-Append the update reminder section to the end of SKILL.md (if not already present):
-
-```bash
-# Check if update section already exists
-if ! grep -q "## Update check" "$SKILL_PATH/SKILL.md"; then
-  cat >> "$SKILL_PATH/SKILL.md" << 'EOF'
-
-## Update check
-
-This skill is managed by [skills.sh](https://skills.sh). To check for updates, run `npx skills update`.
-EOF
-fi
-```
-
-This enables the auto-update reminder system for the newly shared skill.
-
-### Step 7: Initialise git in skill folder
+### Step 6: Initialise git in skill folder
 
 ```bash
 cd "$SKILL_PATH"
@@ -248,7 +229,7 @@ git commit -m "Initial commit
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
 
-### Step 8: Create Public GitHub Repository
+### Step 7: Create Public GitHub Repository
 
 ```bash
 REPO_NAME="skill--$SKILL_NAME"
@@ -257,7 +238,7 @@ REPO_NAME="skill--$SKILL_NAME"
 gh repo create "HartreeWorks/$REPO_NAME" --public --source="$SKILL_PATH" --remote=origin --push
 ```
 
-### Step 9: Convert to Submodule in Parent Repo
+### Step 8: Convert to Submodule in Parent Repo
 
 ```bash
 cd "$SKILLS_DIR"
@@ -277,7 +258,7 @@ Public repo: https://github.com/HartreeWorks/$REPO_NAME
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
 
-### Step 10: Update Public Skills Index
+### Step 9: Update Public Skills Index
 
 Add the new skill to the public skills index at `HartreeWorks/skills`.
 
@@ -309,7 +290,7 @@ git commit -m "Add {skill-name} skill
 git push origin main
 ```
 
-### Step 11: Confirm Success
+### Step 10: Confirm Success
 
 Output the public repository URL to the user:
 
@@ -350,7 +331,7 @@ User: "Share the mochi-srs skill"
 6. Create README.md linking to SKILL.md
 7. Init git and commit
 8. Create `HartreeWorks/skill--mochi-srs` public repo
-9. Convert to submodule
+9. Convert to submodule, update skills index
 10. Report success with the public URL
 
 ## Notes
@@ -361,9 +342,3 @@ User: "Share the mochi-srs skill"
 - **Always complete the security review before publishing** - never skip Step 3
 - Default replacement for client company names: "HartreeWorks LTD"
 - Default replacement for client emails: "alice@example.com"
-
-
-## Update check
-
-This skill is managed by [skills.sh](https://skills.sh). To check for updates, run `npx skills update`.
-
