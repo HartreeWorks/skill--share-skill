@@ -1,11 +1,11 @@
 ---
 name: share-skill
-description: This skill should be used when the user asks to "share a skill", "make a skill public", "publish a skill", "create a public repo for a skill", "convert skill to submodule", or mentions making a Claude Code skill available publicly. Converts a private skill folder into a public GitHub repository and Git submodule.
+description: This skill should be used when the user asks to "share a skill", "make a skill public", "publish a skill", "create a public repo for a skill", or mentions making a Claude Code skill available publicly. Publishes a private skill folder to a public GitHub repository.
 ---
 
 # Share Skill
 
-This skill converts a private skill folder into a public GitHub repository, making it shareable with the community.
+This skill publishes a private skill folder to a public GitHub repository, making it shareable with the community.
 
 ## What It Does
 
@@ -13,11 +13,9 @@ This skill converts a private skill folder into a public GitHub repository, maki
 2. **CRITICAL: Security & privacy review** — checks for credentials and private information
 3. **Skill quality review** — runs the `plugin-dev:skill-reviewer` agent to check best practices
 4. Creates a README.md with a link to SKILL.md
-5. Initialises git in the skill folder
-6. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}`
-7. Pushes the skill to the public repo
-8. Converts the local folder to a Git submodule
-9. Updates the public skills index at https://github.com/HartreeWorks/skills
+5. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}` (if it doesn't exist)
+6. Publishes using `publish-skill.sh` (rsyncs local → public, excluding `data/` and private files)
+7. Updates the public skills index at https://github.com/HartreeWorks/skills
 
 ## Prerequisites
 
@@ -48,11 +46,11 @@ If the skill doesn't exist or has no SKILL.md, inform the user and stop.
 ### Step 2: Check if Already Shared
 
 ```bash
-# Check if already a submodule
-grep -q "path = $SKILL_NAME" "$SKILLS_DIR/.gitmodules" 2>/dev/null && echo "Already a submodule" || echo "Not yet shared"
+# Check if public repo already exists
+gh repo view "HartreeWorks/skill--$SKILL_NAME" --json name 2>/dev/null && echo "Already shared" || echo "Not yet shared"
 ```
 
-If already a submodule, inform the user and stop.
+If already shared, ask the user if they want to re-publish (update the public repo). If yes, skip to Step 7.
 
 ### Step 3: Security & Privacy Review (CRITICAL)
 
@@ -91,7 +89,11 @@ cat "$SKILL_PATH/.gitignore" 2>/dev/null || echo "No .gitignore found"
 
 If missing or incomplete, create/update it before proceeding.
 
-#### 3b: Scan for Private Information in Text Files
+#### 3b: Email scrubbing (automatic)
+
+The `publish-skill.sh` script automatically scrubs Peter's personal email addresses from all published files, replacing them with generic placeholders. This happens during every publish — no manual action needed. If you spot a new email address that isn't being scrubbed, add it to the sed rules in `publish-skill.sh`.
+
+#### 3c: Scan for Private Information in Text Files
 
 Read through ALL text files in the skill folder, especially:
 - `SKILL.md` - often contains examples
@@ -104,12 +106,14 @@ Read through ALL text files in the skill folder, especially:
 | Type | Examples | Replacement |
 |------|----------|-------------|
 | Client company names | 80,000 Hours, Acme Corp, etc. | HartreeWorks LTD |
-| Real people's names | John Smith, Sarah Connor | Generic names (Alice, Bob) or remove |
+| Real people's names (see note below) | Any real person's name | Clearly fictional names (Alice, Bob) or remove |
 | Email addresses | john@client.com | alice@example.com |
 | Slack workspace names | client-workspace | hartreeworks |
 | Phone numbers | Any real numbers | +44 20 1234 5678 |
 | URLs with client domains | client.slack.com | hartreeworks.slack.com |
 | Project/internal names | Specific project codenames | Generic descriptions |
+
+**Real people's names — CRITICAL:** Any name that refers to a real person MUST be replaced with a clearly fictional name (Alice, Bob, Jane Smith, etc.) before publishing. This includes names from the current conversation context — e.g., if you just summarised a call with someone, their name must not appear in examples added to the skill. When in doubt, treat a name as real. The test is: could someone Google this name and find a real person? If yes, replace it.
 
 #### 3c: Report Findings to User
 
@@ -207,58 +211,37 @@ If you get "command not found", [install Node](https://github.com/HartreeWorks/s
 
 Created by [Peter Hartree](https://x.com/peterhartree). For updates, follow [AI Wow](https://wow.pjh.is), my AI uplift newsletter.
 
-Find more skills at [skills.sh](https://skills.sh) and [HartreeWorks/skills](https://github.com/HartreeWorks/skills).
+Find more skills at [HartreeWorks/skills](https://github.com/HartreeWorks/skills).
 ```
 
 **Extract the brief description** from the `description` field in the SKILL.md frontmatter.
 
-### Step 6: Initialise git in skill folder
-
-```bash
-cd "$SKILL_PATH"
-
-# Initialize if not already a git repo
-git init
-
-# Add all files
-git add .
-
-# Create initial commit
-git commit -m "Initial commit
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)"
-```
-
-### Step 7: Create Public GitHub Repository
+### Step 6: Create Public GitHub Repository (if needed)
 
 ```bash
 REPO_NAME="skill--$SKILL_NAME"
 
-# Create public repo and push
-gh repo create "HartreeWorks/$REPO_NAME" --public --source="$SKILL_PATH" --remote=origin --push
+# Create empty public repo (skip if already exists from Step 2)
+gh repo create "HartreeWorks/$REPO_NAME" --public
 ```
 
-### Step 8: Convert to Submodule in Parent Repo
+### Step 7: Publish to Public Repo
+
+Generate a concise commit message summarising the changes being published (e.g., "Split config into models.json + config.json overrides" or "Add brainstorm presets"), then pass it as the second argument:
 
 ```bash
-cd "$SKILLS_DIR"
-
-# Remove the folder from git tracking (but keep files)
-git rm -r --cached "$SKILL_NAME"
-
-# Add as submodule
-git submodule add "https://github.com/HartreeWorks/$REPO_NAME.git" "$SKILL_NAME"
-
-# Commit the change
-git add .gitmodules "$SKILL_NAME"
-git commit -m "Convert $SKILL_NAME to public submodule
-
-Public repo: https://github.com/HartreeWorks/$REPO_NAME
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+# Publish using the publish script (rsyncs local → public, excluding data/ and private files)
+bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_NAME" "Brief description of what changed"
 ```
 
-### Step 9: Update Public Skills Index
+The publish script handles:
+- Shallow-cloning the public repo to a temp dir
+- Rsyncing local files, excluding `data/`, `.env`, `config.json`, `node_modules/`, etc.
+- Ensuring `data/` is in the public repo's `.gitignore`
+- Committing and pushing changes
+- Cleaning up the temp dir
+
+### Step 8: Update Public Skills Index
 
 Add the new skill to the public skills index at `HartreeWorks/skills`.
 
@@ -290,7 +273,7 @@ git commit -m "Add {skill-name} skill
 git push origin main
 ```
 
-### Step 10: Confirm Success
+### Step 9: Confirm Success
 
 Output the public repository URL to the user:
 
@@ -309,7 +292,7 @@ Others can install it by pasting the repo URL into Claude Code.
 |-------|-------|----------|
 | Skill folder not found | Typo in skill name | Verify the skill name exists in `~/.claude/skills/` |
 | No SKILL.md | Skill incomplete | Create a SKILL.md file first |
-| Already a submodule | Already shared | The skill is already public |
+| Already shared | Public repo exists | Ask user if they want to re-publish |
 | Privacy review failed | User chose to stop | User reviews files manually and runs share again |
 | Sensitive files not in .gitignore | Missing .gitignore entries | Add entries to .gitignore before proceeding |
 | gh auth error | Not logged in | Run `gh auth login` |
@@ -320,7 +303,7 @@ Others can install it by pasting the repo URL into Claude Code.
 User: "Share the mochi-srs skill"
 
 1. Validate: `~/.claude/skills/mochi-srs` exists with SKILL.md ✓
-2. Check not already a submodule ✓
+2. Check if `HartreeWorks/skill--mochi-srs` exists → not yet shared ✓
 3. **Security & Privacy Review:**
    - Scan for sensitive files → found `config.json` (already in .gitignore ✓)
    - Scan text files for private info → found "80,000 Hours" in example
@@ -329,9 +312,9 @@ User: "Share the mochi-srs skill"
 4. User approves → apply text replacements
 5. **Skill Quality Review:** run `plugin-dev:skill-reviewer` agent → checks description, writing style, progressive disclosure
 6. Create README.md linking to SKILL.md
-7. Init git and commit
-8. Create `HartreeWorks/skill--mochi-srs` public repo
-9. Convert to submodule, update skills index
+7. Create `HartreeWorks/skill--mochi-srs` public repo
+8. Publish using `publish-skill.sh` (rsyncs local → public, excluding `data/`)
+9. Update skills index
 10. Report success with the public URL
 
 ## Notes
@@ -339,6 +322,8 @@ User: "Share the mochi-srs skill"
 - The GitHub organization is always `HartreeWorks`
 - Repository naming follows the pattern `skill--{skill-name}`
 - The skill folder name becomes the repo suffix
-- **Always complete the security review before publishing** - never skip Step 3
+- **Always complete the security review before publishing** — never skip Step 3
 - Default replacement for client company names: "HartreeWorks LTD"
 - Default replacement for client emails: "alice@example.com"
+- The `data/` directory is automatically excluded from public repos by `publish-skill.sh`
+- To re-publish an existing skill (push updates), just run `bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_NAME" "Description of changes"`

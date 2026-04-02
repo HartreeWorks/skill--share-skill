@@ -8,11 +8,12 @@
 __pycache__/
 *.pyc
 
-# Config files that might contain secrets
-config.json
 .env
 .env.*
 
 # IDE
 .idea/
 .vscode/
+
+# Private local data (not published)
+data/
