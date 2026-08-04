@@ -1,6 +1,6 @@
 ---
 name: share-skill
-description: This skill should be used when the user asks to "share a skill", "make a skill public", "publish a skill", "create a public repo for a skill", or mentions making a Claude Code skill available publicly. Publishes a private skill folder to a public GitHub repository.
+description: Publish a Claude Code skill to a public GitHub repo.
 ---
 
 # Share Skill
@@ -11,37 +11,54 @@ This skill publishes a private skill folder to a public GitHub repository, makin
 
 1. Validates the skill folder exists and has a SKILL.md file
 2. **CRITICAL: Security & privacy review** — checks for credentials and private information
-3. **Skill quality review** — runs the `plugin-dev:skill-reviewer` agent to check best practices
+3. **Skill quality review** — invokes the `skill-creator` skill to check best practices
 4. Creates a README.md with a link to SKILL.md
 5. Creates a public GitHub repo at `HartreeWorks/skill--{skill-name}` (if it doesn't exist)
-6. Publishes using `publish-skill.sh` (rsyncs local → public, excluding `data/` and private files)
+6. Publishes using `publish-skill.sh` (rsyncs local → public excluding `data/` and private files, then applies global + per-skill deterministic scrub rules)
 7. Updates the public skills index at https://github.com/HartreeWorks/skills
 
 ## Prerequisites
 
 - GitHub CLI (`gh`) must be installed and authenticated
-- The skill folder must exist in `~/.claude/skills/`
+- The skill folder must exist either globally (`~/.agents/skills/`, symlinked from `~/.claude/skills/`) or project-locally (`<project>/.claude/skills/`)
 - The skill must have a `SKILL.md` file
 
 ## Workflow
 
 When the user asks to share a skill, follow these steps:
 
-### Step 1: Validate the Skill
+### Step 1: Resolve and Validate the Skill
+
+Skills can live in two places:
+- **Global:** `~/.agents/skills/<name>` (symlinked from `~/.claude/skills/<name>`)
+- **Project-local:** `<project>/.claude/skills/<name>` (inside a specific project repo)
+
+Resolve the skill path by checking both locations:
 
 ```bash
 SKILL_NAME="skill-name-here"
-SKILLS_DIR=~/.claude/skills
-SKILL_PATH="$SKILLS_DIR/$SKILL_NAME"
 
-# Check skill folder exists
-ls "$SKILL_PATH"
+# Prefer a project-local skill in the current working directory, then fall back
+# to the global skills location.
+if [ -d "$PWD/.claude/skills/$SKILL_NAME" ]; then
+  SKILL_PATH="$PWD/.claude/skills/$SKILL_NAME"
+elif [ -d "$HOME/.agents/skills/$SKILL_NAME" ]; then
+  SKILL_PATH="$HOME/.agents/skills/$SKILL_NAME"
+else
+  echo "Skill '$SKILL_NAME' not found in project (.claude/skills) or global (~/.agents/skills)" >&2
+fi
+
+echo "Resolved skill path: $SKILL_PATH"
 
 # Check SKILL.md exists
 ls "$SKILL_PATH/SKILL.md"
 ```
 
+If the user gave an explicit path to the skill folder, use that directly as `$SKILL_PATH` instead.
+
 If the skill doesn't exist or has no SKILL.md, inform the user and stop.
+
+**Name collision:** if the skill exists in *both* a project and the global location, they map to the same public repo (`skill--<name>`). Tell the user both were found and confirm which source to publish before proceeding.
 
 ### Step 2: Check if Already Shared
 
@@ -50,11 +67,21 @@ If the skill doesn't exist or has no SKILL.md, inform the user and stop.
 gh repo view "HartreeWorks/skill--$SKILL_NAME" --json name 2>/dev/null && echo "Already shared" || echo "Not yet shared"
 ```
 
-If already shared, ask the user if they want to re-publish (update the public repo). If yes, skip to Step 7.
+If already shared, ask the user if they want to re-publish (update the public repo). If yes, run the fast-path check (§3.0) to scope the review to what changed, then skip to Step 7 if nothing private changed.
 
 ### Step 3: Security & Privacy Review (CRITICAL)
 
 **This step is mandatory. Do NOT proceed to publishing without completing this review.**
+
+#### 3.0: Fast path for an already-shared skill
+
+Re-publishing a skill that has been shared before does **not** require re-reviewing every file. The deterministic scrub (§3b) re-applies every replacement agreed last time, and a manifest (`.publish-state.json`) records what was published. Scope the manual review to what actually changed:
+
+```bash
+python3 ~/.agents/skills/share-skill/scripts/changed-files.py "$SKILL_PATH"
+```
+
+Only **NEW** and **CHANGED** files need a fresh privacy scan (3a/3c); **UNCHANGED** files are covered by the last review plus the deterministic rules. If it reports "Nothing changed", the scrub rules handle everything — go straight to Step 7. If there is no manifest yet (first share, or a skill shared before this mechanism existed), every file is reported NEW: do the full review below, and publishing writes the manifest for next time.
 
 #### 3a: Check for Sensitive Files
 
@@ -89,9 +116,14 @@ cat "$SKILL_PATH/.gitignore" 2>/dev/null || echo "No .gitignore found"
 
 If missing or incomplete, create/update it before proceeding.
 
-#### 3b: Email scrubbing (automatic)
+#### 3b: Deterministic scrubbing (automatic, two tiers)
 
-The `publish-skill.sh` script automatically scrubs Peter's personal email addresses from all published files, replacing them with generic placeholders. This happens during every publish — no manual action needed. If you spot a new email address that isn't being scrubbed, add it to the sed rules in `publish-skill.sh`.
+`publish-skill.sh` scrubs the published copy in two deterministic passes (via `scripts/scrub.py`), so agreed replacements never have to be re-derived:
+
+1. **Global rules** — `~/.agents/skills/share-skill/scrub-rules.tsv`. Peter's unambiguous personal identifiers (home-directory paths, personal emails, phone numbers, calendar IDs), applied to *every* skill. Add a new always-private token here when you find one — but only things that are never a false positive. Do **not** add names ("Peter Hartree" must survive for README attribution), cities, client names, or project names.
+2. **Per-skill `.scrub`** — an optional `<skill>/.scrub` file (TSV: `find<TAB>replace`, literal strings, `#` comments). This is where the *context-specific* replacements from 3c get recorded: client/project names, sample data, location refs. Once written they re-apply automatically on every future publish. Both `.scrub` and the `.publish-state.json` manifest are excluded from the published copy.
+
+**When you make a replacement in 3c for a skill you might update again, record it in `.scrub`** rather than only editing the file in place — that is what makes small refinements cheap to re-publish. Prefer `.scrub` over editing the private source whenever the source value is worth keeping (a real local path, a Peter-specific workflow note): the private source stays tailored to Peter, and only the published copy is genericised. To confirm a `.scrub` reproduces clean output, dry-run it: `rsync` the skill to a temp dir (excluding `.scrub`/`.publish-state.json`), run `scrub.py` with the global rules then the `.scrub`, and grep the result for private tokens.
 
 #### 3c: Scan for Private Information in Text Files
 
@@ -173,18 +205,26 @@ If the user chooses "Apply changes & proceed":
 
 ### Step 4: Skill Quality Review
 
-After the security review passes, run the `plugin-dev:skill-reviewer` agent to check the skill against best practices before publishing. Use the Task tool:
+After the security review passes, check the skill against best practices before publishing. Invoke the `skill-creator` skill, scoped to review only:
 
 ```
-Task tool with subagent_type: "plugin-dev:skill-reviewer"
-prompt: "Review the skill at ~/.claude/skills/{SKILL_NAME}/SKILL.md for adherence to skill development best practices. Check: description quality (third-person, specific trigger phrases), writing style (imperative form), progressive disclosure (SKILL.md lean, details in references/), and that all referenced files exist."
+Skill tool with skill: "skill-creator"
+args: "Review $SKILL_PATH/SKILL.md for publication. Check description quality
+       (third person, concrete trigger phrases), imperative writing style,
+       progressive disclosure (SKILL.md lean, detail in references/), and that
+       every referenced file and script path exists. Report findings only — do
+       NOT run evals, generate test prompts, or rewrite the skill."
 ```
 
-Present the reviewer's findings to the user. If there are issues rated as high-priority, fix them before proceeding. Minor suggestions can be noted but don't need to block publishing.
+`skill-creator` is an eval-loop skill by default, so the review-only bound is load-bearing — if it starts drafting test prompts or offering to run a benchmark, stop it and review inline instead. If it is unavailable entirely, review inline against those same four criteria rather than skipping the step.
+
+Use the resolved `$SKILL_PATH` from Step 1, not a hardcoded `~/.claude/skills` path.
+
+Present the findings to the user. If there are issues rated as high-priority, fix them before proceeding. Minor suggestions can be noted but don't need to block publishing.
 
 ### Step 5: Create README.md
 
-Create a README.md in the skill folder that links to SKILL.md:
+Create a README.md at `$SKILL_PATH/README.md` (the resolved skill folder) that links to SKILL.md:
 
 ```markdown
 # {Skill Name}
@@ -226,7 +266,9 @@ Generate a concise commit message summarising the changes being published (e.g.,
 
 ```bash
 # Publish using the publish script (rsyncs local → public, excluding data/ and private files)
-bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_NAME" "Brief description of what changed"
+# Pass the resolved $SKILL_PATH so project-local skills are found. The script
+# accepts either a bare name (global) or a directory path (project-local).
+bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_PATH" "Brief description of what changed"
 ```
 
 The publish script handles:
@@ -241,7 +283,7 @@ The publish script handles:
 Add the new skill to the public skills index at `HartreeWorks/skills`.
 
 ```bash
-INDEX_DIR="$SKILLS_DIR/share-skill/skills-index"
+INDEX_DIR="$HOME/.agents/skills/share-skill/skills-index"
 cd "$INDEX_DIR"
 
 # Pull latest
@@ -305,7 +347,7 @@ User: "Share the mochi-srs skill"
    - Report findings and suggest: "80,000 Hours" → "HartreeWorks LTD"
    - Ask user to approve changes
 4. User approves → apply text replacements
-5. **Skill Quality Review:** run `plugin-dev:skill-reviewer` agent → checks description, writing style, progressive disclosure
+5. **Skill Quality Review:** invoke `skill-creator` (review-only) → checks description, writing style, progressive disclosure
 6. Create README.md linking to SKILL.md
 7. Create `HartreeWorks/skill--mochi-srs` public repo
 8. Publish using `publish-skill.sh` (rsyncs local → public, excluding `data/`)
@@ -321,4 +363,4 @@ User: "Share the mochi-srs skill"
 - Default replacement for client company names: "HartreeWorks LTD"
 - Default replacement for client emails: "alice@example.com"
 - The `data/` directory is automatically excluded from public repos by `publish-skill.sh`
-- To re-publish an existing skill (push updates), just run `bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_NAME" "Description of changes"`
+- To re-publish an existing skill (push updates), just run `bash ~/.agents/skills/share-skill/scripts/publish-skill.sh "$SKILL_PATH" "Description of changes"` (pass the skill's directory path; a bare name still works for global skills)

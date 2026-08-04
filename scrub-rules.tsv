@@ -1,0 +1,32 @@
+# Global scrub rules for share-skill — Peter's unambiguous personal identifiers.
+#
+# Format: <find><TAB><replace>   (literal strings, no regex). Blank lines and
+# lines starting with '#' are ignored. Applied to every skill on publish by
+# publish-skill.sh, BEFORE the per-skill .scrub file.
+#
+# ONLY put ALWAYS-private, unambiguous tokens here — things that are never a
+# false positive: home-directory paths, personal emails, phone numbers,
+# calendar IDs. Do NOT add names ("Peter Hartree" must survive for README
+# attribution), cities, client names, or project names — those are
+# context-dependent and belong in each skill's own .scrub file.
+
+# Personal email addresses
+your-email@gmail.com	your-email@gmail.com
+your-email@example.com	your-email@example.com
+your-product@gmail.com	your-product@gmail.com
+your-email@example.com	your-email@example.com
+your-email@example.com	your-email@example.com
+
+# Calendar IDs
+your-meetings-calendar-id@group.calendar.google.com	your-meetings-calendar-id@group.calendar.google.com
+
+# Phone numbers
++44 7000 000000	+44 7000 000000
++33 6 00 00 00 00	+33 6 00 00 00 00
+
+# Home-directory paths (leak the OS username "ph"). Trailing slash on purpose:
+# it avoids false positives like "/Users/phil/" while covering the common case
+# where the path has a further component ("~/foo" -> "~/foo"). It does
+# NOT catch a bare "/Users/ph" with no trailing slash (rare in skill content);
+# the per-skill review is the backstop for that.
+~/	~/
