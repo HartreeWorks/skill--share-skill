@@ -3,8 +3,10 @@
 
 Rules file format (TSV): one rule per line, `find<TAB>replace`. `find` and
 `replace` are treated as LITERAL strings (no regex, no escaping surprises).
-Lines that are blank or start with `#` (after leading whitespace) are ignored.
-A rule whose `find` is empty is skipped.
+Blank lines are ignored. A line starting with `#` (after leading whitespace)
+is a comment only if it contains no tab: a line with a tab is always a rule, so
+a rule can match a Markdown heading such as `## Heading`. A rule whose `find` is
+empty is skipped.
 
 Usage: scrub.py <rules_file> <target_dir>
 
@@ -41,9 +43,11 @@ def load_rules(path):
     with open(path, encoding="utf-8") as f:
         for lineno, raw in enumerate(f, 1):
             line = raw.rstrip("\r\n")  # tolerate CRLF-saved rules files
-            if not line.strip() or line.lstrip().startswith("#"):
+            if not line.strip():
                 continue
             if "\t" not in line:
+                if line.lstrip().startswith("#"):
+                    continue  # comment
                 print(f"  scrub: skipping malformed rule (no tab) at "
                       f"{os.path.basename(path)}:{lineno}", file=sys.stderr)
                 continue

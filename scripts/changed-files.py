@@ -26,44 +26,36 @@ a stale or missing manifest can never cause a changed file to be skipped.
 import hashlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from datetime import datetime
 
-# Kept in rough sync with publish-skill.sh's rsync excludes. Perfect fidelity is
-# not required: the manifest scopes a human/model review, it is not a security
-# boundary. Mis-tracking at worst reviews an extra file (safe).
-SKIP_DIRS = {".git", "data", "node_modules", "__pycache__", ".venv", ".yarn",
-             "dist", ".claude"}
-SKIP_FILES = {".DS_Store", "config.json", ".scrub", ".publish-state.json"}
+FILTERS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                       "publish-filters.rules")
 
 
-def is_skipped_file(name):
-    if name in SKIP_FILES:
-        return True
-    if name.startswith(".env"):
-        return True
-    if name.endswith(".pyc"):
-        return True
-    if ".sync-conflict-" in name:
-        return True
-    return False
+def publishable_files(skill_dir):
+    """List the files publish-skill.sh would copy, using its own rsync filters."""
+    with tempfile.TemporaryDirectory() as empty:
+        result = subprocess.run(
+            ["rsync", "-a", "--dry-run", "--out-format=%n",
+             f"--filter=merge {FILTERS}",
+             skill_dir.rstrip("/") + "/", empty + "/"],
+            capture_output=True, text=True, check=True)
+    return [line for line in result.stdout.splitlines()
+            if line and not line.endswith("/")]
 
 
 def hash_files(skill_dir):
     """Return {relpath: sha256} for every publishable file under skill_dir."""
     out = {}
-    for root, dirs, files in os.walk(skill_dir):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for name in files:
-            if is_skipped_file(name):
-                continue
-            fp = os.path.join(root, name)
-            rel = os.path.relpath(fp, skill_dir)
-            try:
-                with open(fp, "rb") as fh:
-                    out[rel] = hashlib.sha256(fh.read()).hexdigest()
-            except OSError:
-                continue
+    for rel in publishable_files(skill_dir):
+        fp = os.path.join(skill_dir, rel)
+        if not os.path.isfile(fp):
+            continue
+        with open(fp, "rb") as fh:
+            out[rel] = hashlib.sha256(fh.read()).hexdigest()
     return out
 
 

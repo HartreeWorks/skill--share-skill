@@ -1,0 +1,32 @@
+# rsync filter rules: which files of a skill get published.
+# Shared by publish-skill.sh (the copy) and changed-files.py (the review
+# manifest), so both always see the same file set. Order matters: the first
+# matching rule wins.
+
+# Kept despite the .env.* exclude below.
++ .env.example
+
+# Honour each directory's .gitignore (runtime state, transcripts, caches).
+:- .gitignore
+
+- data/
+- .DS_Store
+- .env
+- .env.*
+- *.env
+- config.json
+- *.pem
+- *.key
+- node_modules/
+- .yarn/
+- .pnp.*
+- __pycache__/
+- *.pyc
+- .venv/
+- .claude/
+- .impeccable/
+- *.sync-conflict-*
+- .git
+- dist/
+- .scrub
+- .publish-state.json
